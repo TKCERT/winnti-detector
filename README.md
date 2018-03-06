@@ -63,7 +63,9 @@ Usage: ./wntidect <-i device|-f pcapfile> [-l]
 $ wntidect -f finding.pcap
 wntidect version 1.6 using libnids 1.25 -- Stefan Ruester
 [i] Reading PCAP file eth0_capture.pcap
-[!] 2018-01-23 09:12:50.709193Z Found WINNTI session setup: 10.123.12.123:59308 -> 10.34.34.34:443
+[!] 2018-01-23 09:12:50.709193Z Found WINNTI session setup: (TCP) 10.123.12.123:59308 -> 10.34.34.34:443
+[!] 2018-03-06 00:28:46.525901Z Found WINNTI session setup: (UDP) 10.123.12.123:58762 -> 10.34.34.35:443
+
 ```
 
 ## syslog
