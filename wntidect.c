@@ -85,6 +85,7 @@ uint16_t check_for_winnti(char *data, size_t len)
         return 1;
 
     return (w[0] ^ w[4] ^ w[7]) | (w[1] ^ w[5] ^ w[6]);
+
 }
 
 
@@ -94,6 +95,7 @@ void tcp_callback (struct tcp_stream *tcp, void **param)
     char src_ip[46], dst_ip[46];
     int  sport, dport;
     static char sbuf[1000];
+
 
     switch(tcp->nids_state)
     {
@@ -121,7 +123,7 @@ void tcp_callback (struct tcp_stream *tcp, void **param)
             fill_adr_strings(tcp->addr, src_ip, dst_ip, &sport, &dport);
 
             // Build alert message
-            snprintf(sbuf, sizeof(sbuf), "Found WINNTI session setup: %s:%i -> %s:%i",
+            snprintf(sbuf, sizeof(sbuf), "Found WINNTI session setup: (TCP) %s:%i -> %s:%i",
                       src_ip, sport, dst_ip, dport);
             
             // Make UTC timestamp of last PCAP packet
@@ -154,6 +156,44 @@ void tcp_callback (struct tcp_stream *tcp, void **param)
     }
 }
 
+void udp_callback (struct tuple4 *addr, char *buf, int len, struct ip *iph)
+{
+    char src_ip[46], dst_ip[46];
+    int  sport, dport;
+    static char sbuf[1000];
+
+    // Check for signs of a winnti connection
+    if(check_for_winnti(buf, len) != 0)
+        return;
+
+    // Get IP addresses and ports
+    fill_adr_strings(*addr, src_ip, dst_ip, &sport, &dport);
+
+    // Build alert message
+    snprintf(sbuf, sizeof(sbuf), "Found WINNTI session setup: (UDP) %s:%i -> %s:%i",
+          src_ip, sport, dst_ip, dport);
+            
+    // Make UTC timestamp of last PCAP packet
+    struct tm tm;
+    struct timeval *tv = &nids_last_pcap_header->ts;
+    gmtime_r(&tv->tv_sec, &tm);
+            
+    // Get timestamp
+    char tstamp[64];
+    strftime(tstamp, 64, "%Y-%m-%d %H:%M:%S", &tm);
+            
+    // Print alert to stdout
+    printf("[!] %s.%06ldZ %s\n", tstamp, tv->tv_usec, sbuf);
+    fflush(stdout);
+
+    // Write syslog entry if required
+    if(opt_SYSLOG)
+    {
+        syslog(LOG_LOCAL7 | LOG_ALERT, "%s", sbuf);
+    }
+}
+
+
 void nids_syslog(int type, int err, struct ip *iph, void *data)
 {
     return;
@@ -177,9 +217,6 @@ int main(int argc, char * const *argv)
 
     // Enable TCP workarounds
     nids_params.tcp_workarounds = 1;
-
-    // Set pcap filter to TCP only
-    nids_params.pcap_filter = "tcp";
 
     // Disable portscan detection
     nids_params.scan_num_hosts = 0;
@@ -241,8 +278,10 @@ int main(int argc, char * const *argv)
 
     fflush(stdout);
 
-    // Register callback function
+    // Register callback functions
     nids_register_tcp (tcp_callback);
+    nids_register_udp (udp_callback);
+
     // Start capture
     nids_run ();
 
